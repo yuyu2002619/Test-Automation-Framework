@@ -116,6 +116,41 @@
 
 ![image](https://file1.kamacoder.com/i/web/2025-08-18_12-51-40.jpg)
 
+## 本地环境与配置
+
+主测试项目使用 Python 3.12，`mock_server/api_server` 使用 Python 3.13。两个项目分别维护
+自己的 `pyproject.toml`、`uv.lock` 和虚拟环境，统一使用 uv 安装和执行：
+
+```powershell
+$env:UV_CACHE_DIR = Join-Path (Get-Location) ".uv-cache"
+uv sync --frozen
+uv run python -m pytest tests/unit -q
+
+Push-Location .\mock_server\api_server
+uv sync --frozen
+uv run python --version
+Pop-Location
+```
+
+复制 `.env.example` 为本机 `.env`，按需填写真实配置。`.env` 已加入 Git 忽略，不能提交；
+仓库只保留不含真实凭据的 `.env.example`。运行时显式加载：
+
+```powershell
+Copy-Item .env.example .env
+uv run --env-file .env python -m pytest testcase --collect-only -q
+```
+
+配置优先级为“环境变量 > `conf/config.ini` > 代码安全默认值”。常用变量包括：
+
+- `TAF_API_BASE_URL`：接口基础地址；
+- `TAF_API_TIMEOUT`：正整数超时秒数；
+- `TAF_TLS_VERIFY`：默认 `true`，仅在明确的测试环境中允许关闭；
+- `TAF_DINGTALK_ENABLED`：默认 `false`；
+- `TAF_DINGTALK_WEBHOOK`、`TAF_DINGTALK_SECRET`：只在启用通知时必填。
+
+数据库、邮件和 SSH 的环境变量名称见 `.env.example`。真实密码、Token、Webhook 不应出现在
+源码、`config.ini`、日志、Allure 附件或测试数据中。
+
 最后如果大家想把这个项目做的更有深度，项目专栏最后一栏【项目优化】给大家指明 可以继续优化的点：
 
 ![image](https://file1.kamacoder.com/i/web/2025-08-18_12-52-04.jpg)

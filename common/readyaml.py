@@ -2,31 +2,76 @@ import yaml
 import traceback
 import os
 
+from common.exceptions import TestDataError, YamlLoadError
 from common.recordlog import logs
 from conf.operationConfig import OperationConfig
 from conf.setting import FILE_PATH
 
 
-def get_testcase_yaml(file):
-    testcase_list = []
+def _load_yaml_file(file):
+    """使用 UTF-8 安全解析 YAML，并保留底层异常链。"""
+
     try:
-        with open(file, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-            if len(data) <= 1:
-                yam_data = data[0]
-                base_info = yam_data.get('baseInfo')
-                for ts in yam_data.get('testCase'):
-                    param = [base_info, ts]
-                    testcase_list.append(param)
-                return testcase_list
-            else:
-                return data
-    except UnicodeDecodeError:
-        logs.error(f"[{file}]文件编码格式错误，--尝试使用utf-8编码解码YAML文件时发生了错误，请确保你的yaml文件是UTF-8格式！")
-    except FileNotFoundError:
-        logs.error(f'[{file}]文件未找到，请检查路径是否正确')
-    except Exception as e:
-        logs.error(f'获取【{file}】文件数据时出现未知错误: {str(e)}')
+        with open(file, 'r', encoding='utf-8') as yaml_file:
+            data = yaml.safe_load(yaml_file)
+    except FileNotFoundError as exc:
+        error = YamlLoadError(f'YAML文件不存在：{file}')
+        logs.error(str(error))
+        raise error from exc
+    except UnicodeDecodeError as exc:
+        error = YamlLoadError(f'YAML文件不是有效的UTF-8编码：{file}')
+        logs.error(str(error))
+        raise error from exc
+    except yaml.YAMLError as exc:
+        error = YamlLoadError(f'YAML语法解析失败：{file}；{exc}')
+        logs.error(str(error))
+        raise error from exc
+    except OSError as exc:
+        error = YamlLoadError(f'YAML文件读取失败：{file}；{exc}')
+        logs.error(str(error))
+        raise error from exc
+
+    if data is None:
+        error = TestDataError(f'YAML文件内容为空：{file}')
+        logs.error(str(error))
+        raise error
+
+    return data
+
+
+def get_testcase_yaml(file):
+    """读取并校验接口测试 YAML 的顶层结构。"""
+
+    data = _load_yaml_file(file)
+    if not isinstance(data, list):
+        raise TestDataError(
+            f'YAML根节点必须是list类型：{file}；'
+            f'当前类型为：{type(data).__name__}'
+        )
+    if not data:
+        raise TestDataError(f'YAML测试用例列表不能为空：{file}')
+
+    for index, yaml_case in enumerate(data):
+        location = f'{file}的第{index + 1}个顶层用例'
+        if not isinstance(yaml_case, dict):
+            raise TestDataError(f'{location}必须是dict类型')
+
+        base_info = yaml_case.get('baseInfo')
+        test_cases = yaml_case.get('testCase')
+        if not isinstance(base_info, dict):
+            raise TestDataError(f'{location}缺少baseInfo，或baseInfo不是dict类型')
+        if not isinstance(test_cases, list):
+            raise TestDataError(f'{location}缺少testCase，或testCase不是list类型')
+        if not test_cases:
+            raise TestDataError(f'{location}的testCase不能为空')
+        if not all(isinstance(test_case, dict) and test_case for test_case in test_cases):
+            raise TestDataError(f'{location}的testCase每一项都必须是非空dict类型')
+
+    if len(data) == 1:
+        yaml_case = data[0]
+        return [[yaml_case['baseInfo'], test_case] for test_case in yaml_case['testCase']]
+
+    return data
 
 
 class ReadYamlData:
@@ -47,13 +92,8 @@ class ReadYamlData:
         :param file: YAML文件
         :return: 返回list
         """
-        # Loader=yaml.FullLoader表示加载完整的YAML语言，避免任意代码执行，无此参数控制台报Warning
-        try:
-            with open(self.yaml_file, 'r', encoding='utf-8') as f:
-                self.yaml_data = yaml.safe_load(f)
-                return self.yaml_data
-        except Exception:
-            logs.error(str(traceback.format_exc()))
+        self.yaml_data = _load_yaml_file(self.yaml_file)
+        return self.yaml_data
 
     def write_yaml_data(self, value):
         """

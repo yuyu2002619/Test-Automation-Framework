@@ -1,4 +1,5 @@
 from common.sendrequest import SendRequest
+from common.security import redact_sensitive, redact_text, redact_url
 from common.readyaml import ReadYamlData
 from common.recordlog import logs
 from conf.operationConfig import OperationConfig
@@ -10,6 +11,7 @@ import jsonpath
 import re
 import traceback
 from json.decoder import JSONDecodeError
+from conf import setting
 
 assert_res = Assertions()
 
@@ -54,12 +56,12 @@ class RequestBase(object):
                     extract_data = ','.join(e for e in extract_data)
                 str_data = str_data.replace(ref_all_params, str(extract_data))
         # 还原数据
-        if data and isinstance(data, dict):
+        if isinstance(data, (dict, list)):
             data = json.loads(str_data)
-            self.handler_yaml_list(data)
-        else:
-            data = str_data
-        return data
+            if isinstance(data, dict):
+                self.handler_yaml_list(data)
+            return data
+        return str_data
 
     def specification_yaml(self, case_info):
         """
@@ -70,29 +72,42 @@ class RequestBase(object):
         params_type = ['params', 'data', 'json']
         cookie = None
         try:
-            base_url = self.conf.get_section_for_data('api_envi', 'host')
+            base_url = setting.get_api_base_url(self.conf)
             # base_url = self.replace_load(case_info['baseInfo']['url'])
             url = base_url + case_info["baseInfo"]["url"]
-            allure.attach(url, f'接口地址：{url}')
+            allure.attach(redact_url(url), f'接口地址：{redact_url(url)}')
             api_name = case_info["baseInfo"]["api_name"]
             allure.attach(api_name, f'接口名：{api_name}')
             method = case_info["baseInfo"]["method"]
             allure.attach(method, f'请求方法：{method}')
             header = self.replace_load(case_info["baseInfo"]["header"])
-            allure.attach(str(header), '请求头信息', allure.attachment_type.TEXT)
-            try:
-                cookie = self.replace_load(case_info["baseInfo"]["cookies"])
-                allure.attach(str(cookie), 'Cookie', allure.attachment_type.TEXT)
-            except:
-                pass
+            allure.attach(str(redact_sensitive(header)), '请求头信息', allure.attachment_type.TEXT)
+            raw_cookie = case_info["baseInfo"].get("cookies")
+            if raw_cookie is not None:
+                cookie = self.replace_load(raw_cookie)
+                if not isinstance(cookie, dict):
+                    raise TypeError(
+                        'baseInfo.cookies必须是YAML mapping/dict类型，'
+                        f'当前类型为：{type(cookie).__name__}'
+                    )
+                allure.attach(str(redact_sensitive(cookie)), 'Cookie', allure.attachment_type.TEXT)
             for tc in case_info["testCase"]:
                 case_name = tc.pop("case_name")
                 allure.attach(case_name, f'测试用例名称：{case_name}', allure.attachment_type.TEXT)
                 # 断言结果解析替换
-                val = self.replace_load(tc.get('validation'))
-                tc['validation'] = val
-                # 字符串形式的列表转换为list类型
-                validation = eval(tc.pop('validation'))
+                raw_validation = tc.pop('validation', None)
+                if raw_validation is None:
+                    raise ValueError(f'测试用例【{case_name}】缺少validation字段')
+                validation = self.replace_load(raw_validation)
+                if not isinstance(validation, list):
+                    raise TypeError(
+                        f'测试用例【{case_name}】的validation必须是list类型，'
+                        f'当前类型为：{type(validation).__name__}'
+                    )
+                if not validation:
+                    raise ValueError(f'测试用例【{case_name}】的validation不能为空')
+                if not all(isinstance(item, dict) and item for item in validation):
+                    raise TypeError(f'测试用例【{case_name}】的validation每一项都必须是非空dict类型')
                 allure_validation = str([str(list(i.values())) for i in validation])
                 allure.attach(allure_validation, "预期结果", allure.attachment_type.TEXT)
                 extract = tc.pop('extract', None)
@@ -113,7 +128,7 @@ class RequestBase(object):
                                         method=method,
                                         file=files, **tc)
                 res_text = res.text
-                allure.attach(res_text, '接口响应信息', allure.attachment_type.TEXT)
+                allure.attach(redact_text(res_text), '接口响应信息', allure.attachment_type.TEXT)
                 status_code = res.status_code
                 allure.attach(self.allure_attach_response(res.json()), '接口响应信息', allure.attachment_type.TEXT)
 
@@ -127,20 +142,20 @@ class RequestBase(object):
                     assert_res.assert_result(validation, res_json, status_code)
                 except JSONDecodeError as js:
                     logs.error("系统异常或接口未请求！")
-                    raise js
+                    raise
                 except Exception as e:
                     logs.error(str(traceback.format_exc()))
-                    raise e
+                    raise
         except Exception as e:
             logs.error(e)
-            raise e
+            raise
 
     @classmethod
     def allure_attach_response(cls, response):
         if isinstance(response, dict):
-            allure_response = json.dumps(response, ensure_ascii=False, indent=4)
+            allure_response = json.dumps(redact_sensitive(response), ensure_ascii=False, indent=4)
         else:
-            allure_response = response
+            allure_response = redact_text(response)
         return allure_response
 
     def extract_data(self, testcase_extract, response):

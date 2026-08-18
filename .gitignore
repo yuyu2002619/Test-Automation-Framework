@@ -9,3 +9,8 @@ logs/
 /report/results.xml
 __pycache__/
 .pytest_cache/
+.pytest-tmp*/
+.uv-cache/
+.env
+.env.*
+!.env.example

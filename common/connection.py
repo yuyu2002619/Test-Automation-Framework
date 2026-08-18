@@ -98,7 +98,7 @@ class ConnectRedis:
         self.password = passwd
         self.db = db
         # 使用连接池方式，decode_responses=True可自动转为字符串
-        logs.info(f"连接Redis--host:{ip},port:{port},user:{username},password:{passwd},db:{db}")
+        logs.info(f"连接Redis--host:{ip},port:{port},user:{username},password:<redacted>,db:{db}")
         try:
             pool = redis.ConnectionPool(host=self.host, port=int(self.port), password=self.password)
             self.first_conn = redis.Redis(connection_pool=pool, decode_responses=True)

@@ -1,5 +1,6 @@
 import sys
 import traceback
+import os
 
 # sys.path.insert(0, "..")
 
@@ -41,6 +42,10 @@ class OperationConfig:
         :param option:头部值下面的选项
         :return:
         """
+        env_name = setting.get_config_env_name(section, option)
+        if env_name is not None and env_name in os.environ:
+            return os.environ[env_name]
+
         try:
             values = self.conf.get(section, option)
             return values
