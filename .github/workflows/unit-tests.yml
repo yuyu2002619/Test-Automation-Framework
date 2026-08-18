@@ -30,8 +30,23 @@ jobs:
         run: uv sync --locked
 
       - name: Run isolated framework unit tests
-        run: >-
-          uv run --no-sync python -m pytest
-          --basetemp=.pytest-tmp-ci
-          --confcutdir=tests/unit
-          tests/unit -q
+        run: |
+          mkdir -p report/ci/allure-results
+          uv run --no-sync python -m pytest \
+            --basetemp=.pytest-tmp-ci \
+            --confcutdir=tests/unit \
+            --junitxml=report/ci/junit.xml \
+            --alluredir=report/ci/allure-results \
+            --clean-alluredir \
+            tests/unit -q
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            report/ci/junit.xml
+            report/ci/allure-results
+          if-no-files-found: warn
+          retention-days: 7
