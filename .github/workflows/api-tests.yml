@@ -1,0 +1,55 @@
+name: API Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Run pytest against mock API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.2"
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            mock_server/api_server/uv.lock
+
+      - name: Install Python runtimes
+        run: uv python install 3.12 3.13
+
+      - name: Install test framework dependencies
+        run: uv sync --frozen --python 3.12
+
+      - name: Install mock API dependencies
+        run: uv sync --frozen --project mock_server/api_server --python 3.13
+
+      - name: Start mock API and wait for readiness
+        working-directory: mock_server/api_server/base
+        run: |
+          nohup ../.venv/bin/python flask_service.py > mock-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8787/index > /dev/null; then
+              echo "Mock API is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Mock API did not become ready"
+          cat mock-server.log
+          exit 1
+
+      - name: Run API tests
+        run: .venv/bin/python -m pytest -v --junitxml=report/ci-results.xml
