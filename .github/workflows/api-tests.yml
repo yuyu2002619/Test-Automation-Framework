@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      verify_failure_artifact:
+        description: Verify that artifacts are uploaded after a test failure
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -52,7 +58,38 @@ jobs:
           exit 1
 
       - name: Run API tests
-        run: .venv/bin/python -m pytest -v --junitxml=report/ci-results.xml
+        shell: bash
+        env:
+          VERIFY_FAILURE_ARTIFACT: ${{ inputs.verify_failure_artifact }}
+        run: |
+          test_targets=(testcase)
+
+          if [[ "$VERIFY_FAILURE_ARTIFACT" == "true" ]]; then
+            mkdir -p .ci
+            cat > .ci/test_ci_failure_probe.py <<'PY'
+          def test_ci_failure_probe():
+              assert False, "Intentional CI failure for artifact verification"
+          PY
+            test_targets+=(.ci/test_ci_failure_probe.py)
+          fi
+
+          .venv/bin/python -m pytest "${test_targets[@]}" -v \
+            --junitxml=report/ci-results.xml
+
+      - name: Write API test failure summary
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          {
+            echo "## API test failure"
+            echo
+            echo "- Workflow: ${{ github.workflow }}"
+            echo "- Branch: ${{ github.ref_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Run ID: ${{ github.run_id }}"
+            echo
+            echo "Download the artifact to inspect the JUnit report and mock API log."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload API test results
         if: ${{ !cancelled() }}
