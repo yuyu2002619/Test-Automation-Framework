@@ -53,3 +53,14 @@ jobs:
 
       - name: Run API tests
         run: .venv/bin/python -m pytest -v --junitxml=report/ci-results.xml
+
+      - name: Upload API test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            report/ci-results.xml
+            mock_server/api_server/base/mock-server.log
+          if-no-files-found: warn
+          retention-days: 7
