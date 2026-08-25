@@ -1,0 +1,96 @@
+name: Web Smoke Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-smoke:
+    name: Playwright smoke against mock order UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.2"
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            mock_server/api_server/uv.lock
+
+      - name: Install Python runtimes
+        run: uv python install 3.12 3.13
+
+      - name: Install test framework dependencies
+        run: uv sync --frozen --python 3.12
+
+      - name: Install mock API dependencies
+        run: uv sync --frozen --project mock_server/api_server --python 3.13
+
+      - name: Install Playwright Chromium
+        run: .venv/bin/python -m playwright install --with-deps chromium
+
+      - name: Start mock API and wait for readiness
+        working-directory: mock_server/api_server/base
+        run: |
+          nohup ../.venv/bin/python flask_service.py > mock-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8787/index > /dev/null; then
+              echo "Mock API and Web UI are ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Mock API did not become ready"
+          cat mock-server.log
+          exit 1
+
+      - name: Run Playwright Web smoke test
+        env:
+          TAF_WEB_BASE_URL: http://127.0.0.1:8787
+          TAF_WEB_USERNAME: test123
+          TAF_WEB_PASSWORD: qwe666
+        run: |
+          .venv/bin/python -m pytest tests/web -m "web and smoke" -v \
+            --browser chromium \
+            --tracing retain-on-failure \
+            --screenshot only-on-failure \
+            --full-page-screenshot \
+            --video retain-on-failure \
+            --output test-results \
+            --junitxml=report/web-ci-results.xml
+
+      - name: Write Web test failure summary
+        if: ${{ failure() }}
+        run: |
+          {
+            echo "## Web smoke test failure"
+            echo
+            echo "- Workflow: ${{ github.workflow }}"
+            echo "- Branch: ${{ github.ref_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Run ID: ${{ github.run_id }}"
+            echo
+            echo "Download the artifact and open trace.zip with Playwright Trace Viewer."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Playwright results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-smoke-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/
+            report/web-ci-results.xml
+            mock_server/api_server/base/mock-server.log
+          if-no-files-found: warn
+          retention-days: 7

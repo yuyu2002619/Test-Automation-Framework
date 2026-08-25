@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>创建订单</title>
+    <link rel="stylesheet" href="{{ url_for('web_ui.static', filename='style.css') }}">
+    <script defer src="{{ url_for('web_ui.static', filename='orders.js') }}"></script>
+</head>
+<body>
+    <main class="panel wide" aria-labelledby="page-title">
+        <div class="heading-row">
+            <div>
+                <p class="eyebrow">Web Smoke Test</p>
+                <h1 id="page-title" data-testid="page-title">创建测试订单</h1>
+            </div>
+            <button class="secondary" type="button" data-testid="logout-button">退出登录</button>
+        </div>
+
+        <p
+            class="message"
+            data-testid="products-status"
+            role="status"
+            aria-live="polite"
+        >正在加载商品……</p>
+
+        <form data-testid="order-form">
+            <label for="product">商品</label>
+            <select id="product" data-testid="product-select" disabled required>
+                <option value="">请选择商品</option>
+            </select>
+
+            <label for="quantity">数量</label>
+            <input
+                id="quantity"
+                data-testid="quantity"
+                type="number"
+                min="1"
+                max="4"
+                value="1"
+                required
+            >
+
+            <button type="submit" data-testid="create-order-button" disabled>创建订单</button>
+        </form>
+
+        <section class="result" data-testid="order-result" aria-live="polite">
+            <h2>执行结果</h2>
+            <dl>
+                <div>
+                    <dt>消息</dt>
+                    <dd data-testid="order-message">尚未创建订单</dd>
+                </div>
+                <div>
+                    <dt>订单号</dt>
+                    <dd data-testid="order-number">-</dd>
+                </div>
+                <div>
+                    <dt>状态</dt>
+                    <dd data-testid="order-status">-</dd>
+                </div>
+            </dl>
+        </section>
+    </main>
+</body>
+</html>

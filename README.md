@@ -151,6 +151,53 @@ uv run --env-file .env python -m pytest testcase --collect-only -q
 数据库、邮件和 SSH 的环境变量名称见 `.env.example`。真实密码、Token、Webhook 不应出现在
 源码、`config.ini`、日志、Allure 附件或测试数据中。
 
+## Web UI 与 Playwright 冒烟测试
+
+仓库内置的 Flask Mock API 同时提供两个极简业务页面：
+
+- `http://127.0.0.1:8787/ui/login`：登录页面；
+- `http://127.0.0.1:8787/ui/orders`：商品加载与订单创建页面。
+
+页面复用 `/coupApply/cms/login_dw`、`/coupApply/cms/goodsList` 和
+`/coupApply/cms/placeAnOrder` 接口。`pages/` 存放 Page Object，`tests/web/`
+存放 Playwright 用例。测试结束后会恢复文件型订单状态，避免污染 Mock 数据。
+
+首次运行先安装 Chromium：
+
+```powershell
+$env:UV_CACHE_DIR = Join-Path (Get-Location) ".uv-cache"
+uv sync --frozen
+uv run playwright install chromium
+```
+
+在第一个终端启动 Mock 服务：
+
+```powershell
+Push-Location .\mock_server\api_server
+uv sync --frozen
+uv run python .\base\flask_service.py
+```
+
+在第二个终端运行 Web 冒烟：
+
+```powershell
+uv run --env-file .env python -m pytest tests/web -m "web and smoke" -v `
+  --browser chromium `
+  --tracing retain-on-failure `
+  --screenshot only-on-failure `
+  --video retain-on-failure `
+  --output test-results
+```
+
+失败 Trace 可以使用下面的命令打开：
+
+```powershell
+uv run playwright show-trace .\test-results\具体用例目录\trace.zip
+```
+
+`.github/workflows/web-smoke.yml` 会在 GitHub Actions 中安装 Chromium、启动 Mock
+服务、运行同一条冒烟链路，并在测试失败后上传 Trace、截图、视频、JUnit XML 和服务日志。
+
 最后如果大家想把这个项目做的更有深度，项目专栏最后一栏【项目优化】给大家指明 可以继续优化的点：
 
 ![image](https://file1.kamacoder.com/i/web/2025-08-18_12-52-04.jpg)

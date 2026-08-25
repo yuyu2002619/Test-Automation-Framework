@@ -23,6 +23,7 @@ import json  # noqa: E402
 import random  # noqa: E402
 from flask import jsonify, make_response, request  # noqa: E402
 from functools import wraps  # noqa: E402
+from web_ui import web_ui  # noqa: E402
 
 """
 mock接口服务
@@ -30,6 +31,7 @@ mock接口服务
 
 # __name__表示当前的python文件名，把该文件当做一个服务
 api = flask.Flask(__name__)
+api.register_blueprint(web_ui, url_prefix='/ui')
 
 api.config.from_object(__name__)
 # 定义Flask app时，指定JSON_AS_ASCII的参数设置为False，阻止jsonify将json内容转为ASCII进行返回

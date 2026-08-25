@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>订单系统登录</title>
+    <link rel="stylesheet" href="{{ url_for('web_ui.static', filename='style.css') }}">
+    <script defer src="{{ url_for('web_ui.static', filename='login.js') }}"></script>
+</head>
+<body>
+    <main class="panel" aria-labelledby="page-title">
+        <p class="eyebrow">Test Automation Framework</p>
+        <h1 id="page-title" data-testid="page-title">订单系统登录</h1>
+        <p class="subtitle">登录后可以查询商品并创建测试订单。</p>
+
+        <form data-testid="login-form">
+            <label for="username">用户名</label>
+            <input
+                id="username"
+                name="username"
+                data-testid="username"
+                autocomplete="username"
+                required
+            >
+
+            <label for="password">密码</label>
+            <input
+                id="password"
+                name="password"
+                data-testid="password"
+                type="password"
+                autocomplete="current-password"
+                required
+            >
+
+            <button type="submit" data-testid="login-button">登录</button>
+        </form>
+
+        <p
+            class="message error"
+            data-testid="login-error"
+            role="alert"
+            aria-live="polite"
+        ></p>
+    </main>
+</body>
+</html>
